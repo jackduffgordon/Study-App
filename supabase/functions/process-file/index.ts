@@ -6,15 +6,14 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
 interface ProcessFileRequest {
   fileId: string;
-  userId: string;
-  moduleId: string;
 }
 
 interface FileRecord {
   id: string;
   user_id: string;
+  module_id: string;
   file_type: string;
-  file_path: string;
+  storage_path: string;
   file_name: string;
   processing_status: string;
 }
@@ -64,7 +63,7 @@ async function validateAuth(authHeader: string): Promise<string | null> {
     const {
       data: { user },
       error,
-    } = await supabase.auth.admin.getUserById(token);
+    } = await supabase.auth.getUser(token);
 
     if (error || !user) {
       return null;
@@ -101,45 +100,15 @@ async function downloadFileContent(
   filePath: string
 ): Promise<string> {
   const { data, error } = await supabase.storage
-    .from("study-materials")
+    .from("uploads")
     .download(filePath);
 
   if (error) {
     throw new Error(`Failed to download file: ${error.message}`);
   }
 
-  // Convert blob to text
-  // Note: In production, you would use proper PDF/PPTX parsing libraries
-  // For PDFs: consider using a service like pdf-parse or pdfjs-dist
-  // For PPTX: consider using a service like unzipper + xml parser or libre-convert
-  // For Videos: consider using Whisper API or similar transcription service
   const text = await data.text();
   return text;
-}
-
-async function extractContentFromFile(
-  content: string,
-  fileType: string
-): Promise<string> {
-  // In production:
-  // - PDF: Use a PDF parsing service or library (pdf-parse, pdfjs-dist, etc.)
-  // - PPTX: Unzip the file, parse presentation.xml for slide content
-  // - Video: Send to transcription service like OpenAI Whisper
-
-  // For this implementation, we assume the content is already text-like
-  // In a real scenario, you'd parse the actual file format
-  if (fileType === "pdf") {
-    // Placeholder: in production, use pdf2json, pdfjs-dist, or call external API
-    console.log("Processing PDF file - in production use PDF parser service");
-  } else if (fileType === "pptx") {
-    // Placeholder: in production, unzip and parse XML
-    console.log("Processing PPTX file - in production use PPTX parser service");
-  } else if (fileType === "video") {
-    // Placeholder: in production, use transcription service
-    console.log("Processing video file - in production use Whisper or similar");
-  }
-
-  return content;
 }
 
 async function generateMaterialsWithClaude(
@@ -156,7 +125,7 @@ async function generateMaterialsWithClaude(
       model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
       system:
-        "You are a study material generator. Given educational content, generate study materials in valid JSON format. Always respond with valid JSON only.",
+        "You are a study material generator. Given educational content, generate study materials in valid JSON format. Always respond with valid JSON only, no markdown.",
       messages: [
         {
           role: "user",
@@ -197,7 +166,7 @@ Generate:
 - 3 essay prompts with detailed frameworks
 
 Content to analyze:
-${extractedContent}`,
+${extractedContent.slice(0, 15000)}`,
         },
       ],
     }),
@@ -213,7 +182,6 @@ ${extractedContent}`,
   const data = await response.json();
   const content = data.content[0].text;
 
-  // Parse JSON response
   const materials = JSON.parse(content) as GeneratedMaterials;
   return materials;
 }
@@ -231,8 +199,9 @@ async function insertFlashcards(
     module_id: moduleId,
     question: card.question,
     answer: card.answer,
+    source_type: "page" as const,
     source_reference: card.source_reference,
-    created_at: new Date().toISOString(),
+    difficulty: "medium" as const,
   }));
 
   const { error } = await supabase.from("flashcards").insert(records);
@@ -254,11 +223,14 @@ async function insertMCQQuestions(
     user_id: userId,
     module_id: moduleId,
     question: q.question,
-    options: q.options,
-    correct_option: q.correct_option,
-    explanation: q.explanation,
+    options: JSON.stringify({
+      choices: q.options,
+      correct_index: q.correct_option,
+      explanation: q.explanation,
+    }),
+    source_type: "page" as const,
     source_reference: q.source_reference,
-    created_at: new Date().toISOString(),
+    difficulty: "medium" as const,
   }));
 
   const { error } = await supabase
@@ -282,12 +254,14 @@ async function insertEssayPrompts(
     user_id: userId,
     module_id: moduleId,
     prompt: p.prompt,
-    thesis_suggestion: p.thesis_suggestion,
-    key_arguments: p.key_arguments,
-    counter_arguments: p.counter_arguments,
-    evidence_points: p.evidence_points,
+    argument_framework: JSON.stringify({
+      thesis_suggestion: p.thesis_suggestion,
+      key_arguments: p.key_arguments,
+      counter_arguments: p.counter_arguments,
+      evidence_points: p.evidence_points,
+    }),
+    source_type: "page" as const,
     source_reference: p.source_reference,
-    created_at: new Date().toISOString(),
   }));
 
   const { error } = await supabase
@@ -306,7 +280,7 @@ async function updateFileStatus(
 ): Promise<void> {
   const { error } = await supabase
     .from("files")
-    .update({ processing_status: status, updated_at: new Date().toISOString() })
+    .update({ processing_status: status })
     .eq("id", fileId);
 
   if (error) {
@@ -319,28 +293,25 @@ async function updateGenerationsUsed(
   userId: string
 ): Promise<void> {
   const { data: profile, error: fetchError } = await supabase
-    .from("user_profiles")
+    .from("profiles")
     .select("monthly_generations_used")
     .eq("id", userId)
     .single();
 
   if (fetchError) {
-    throw new Error(
-      `Failed to fetch user profile: ${fetchError.message}`
-    );
+    console.error("Failed to fetch profile for generation count:", fetchError);
+    return;
   }
 
   const newCount = (profile.monthly_generations_used || 0) + 1;
 
   const { error: updateError } = await supabase
-    .from("user_profiles")
+    .from("profiles")
     .update({ monthly_generations_used: newCount })
     .eq("id", userId);
 
   if (updateError) {
-    throw new Error(
-      `Failed to update generations used: ${updateError.message}`
-    );
+    console.error("Failed to update generations used:", updateError);
   }
 }
 
@@ -352,16 +323,16 @@ async function logActivity(
 ): Promise<void> {
   const { error } = await supabase.from("activity_feed").insert({
     user_id: userId,
-    action: "generate_materials",
-    resource_id: fileId,
-    resource_type: "file",
-    status: status,
-    created_at: new Date().toISOString(),
+    activity_type: "file_uploaded",
+    metadata: JSON.stringify({
+      file_id: fileId,
+      action: "generate_materials",
+      status: status,
+    }),
   });
 
   if (error) {
     console.error("Failed to log activity:", error);
-    // Don't throw - activity logging is non-critical
   }
 }
 
@@ -381,11 +352,11 @@ async function handleProcessFile(req: Request): Promise<Response> {
     }
 
     const body = (await req.json()) as ProcessFileRequest;
-    const { fileId, moduleId } = body;
+    const { fileId } = body;
 
-    if (!fileId || !moduleId) {
+    if (!fileId) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields" }),
+        JSON.stringify({ error: "Missing fileId" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -395,7 +366,7 @@ async function handleProcessFile(req: Request): Promise<Response> {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    // Fetch file record
+    // Fetch file record (gets moduleId from the file)
     const fileRecord = await fetchFileRecord(supabase, fileId, userId);
     if (!fileRecord) {
       return new Response(
@@ -407,43 +378,21 @@ async function handleProcessFile(req: Request): Promise<Response> {
       );
     }
 
+    const moduleId = fileRecord.module_id;
+
     // Update status to processing
     await updateFileStatus(supabase, fileId, "processing");
 
     // Download file content
-    const rawContent = await downloadFileContent(supabase, fileRecord.file_path);
-
-    // Extract content based on file type
-    const extractedContent = await extractContentFromFile(
-      rawContent,
-      fileRecord.file_type
-    );
+    const rawContent = await downloadFileContent(supabase, fileRecord.storage_path);
 
     // Generate materials with Claude
-    const materials = await generateMaterialsWithClaude(extractedContent);
+    const materials = await generateMaterialsWithClaude(rawContent);
 
     // Insert generated materials
-    await insertFlashcards(
-      supabase,
-      materials.flashcards,
-      fileId,
-      userId,
-      moduleId
-    );
-    await insertMCQQuestions(
-      supabase,
-      materials.mcq_questions,
-      fileId,
-      userId,
-      moduleId
-    );
-    await insertEssayPrompts(
-      supabase,
-      materials.essay_prompts,
-      fileId,
-      userId,
-      moduleId
-    );
+    await insertFlashcards(supabase, materials.flashcards, fileId, userId, moduleId);
+    await insertMCQQuestions(supabase, materials.mcq_questions, fileId, userId, moduleId);
+    await insertEssayPrompts(supabase, materials.essay_prompts, fileId, userId, moduleId);
 
     // Update file status to completed
     await updateFileStatus(supabase, fileId, "completed");
@@ -472,21 +421,6 @@ async function handleProcessFile(req: Request): Promise<Response> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("Process file error:", errorMessage);
-
-    // Try to update file status to failed
-    try {
-      const body = (await req.json()) as ProcessFileRequest;
-      const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-      await updateFileStatus(supabase, body.fileId, "failed");
-
-      const authHeader = req.headers.get("Authorization");
-      const userId = await validateAuth(authHeader || "");
-      if (userId) {
-        await logActivity(supabase, userId, body.fileId, "failed");
-      }
-    } catch (updateError) {
-      console.error("Failed to update status on error:", updateError);
-    }
 
     return new Response(
       JSON.stringify({ error: errorMessage }),

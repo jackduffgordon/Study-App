@@ -7,7 +7,6 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 interface EssayFeedbackRequest {
   essayText: string;
   promptId: string;
-  userId: string;
 }
 
 interface EssayFeedback {
@@ -42,7 +41,7 @@ async function validateAuth(authHeader: string): Promise<string | null> {
     const {
       data: { user },
       error,
-    } = await supabase.auth.admin.getUserById(token);
+    } = await supabase.auth.getUser(token);
 
     if (error || !user) {
       return null;
@@ -77,6 +76,10 @@ async function generateEssayFeedback(
   essayText: string,
   essayPrompt: any
 ): Promise<EssayFeedback> {
+  const framework = typeof essayPrompt.argument_framework === 'string'
+    ? JSON.parse(essayPrompt.argument_framework)
+    : essayPrompt.argument_framework || {};
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -88,7 +91,7 @@ async function generateEssayFeedback(
       model: "claude-sonnet-4-20250514",
       max_tokens: 3000,
       system:
-        "You are an expert academic essay evaluator. Provide detailed feedback on essays with constructive criticism and specific improvement suggestions. Always respond with valid JSON only.",
+        "You are an expert academic essay evaluator. Provide detailed feedback on essays with constructive criticism and specific improvement suggestions. Always respond with valid JSON only, no markdown.",
       messages: [
         {
           role: "user",
@@ -107,17 +110,13 @@ async function generateEssayFeedback(
 Essay Prompt:
 ${essayPrompt.prompt}
 
-Thesis Suggestion:
-${essayPrompt.thesis_suggestion}
+${framework.thesis_suggestion ? `Thesis Suggestion: ${framework.thesis_suggestion}` : ""}
 
-Key Arguments to Consider:
-${essayPrompt.key_arguments.join(", ")}
+${framework.key_arguments ? `Key Arguments to Consider: ${framework.key_arguments.join(", ")}` : ""}
 
-Counter-Arguments to Address:
-${essayPrompt.counter_arguments.join(", ")}
+${framework.counter_arguments ? `Counter-Arguments to Address: ${framework.counter_arguments.join(", ")}` : ""}
 
-Evidence Points Available:
-${essayPrompt.evidence_points.join(", ")}
+${framework.evidence_points ? `Evidence Points Available: ${framework.evidence_points.join(", ")}` : ""}
 
 Student Essay:
 ${essayText}
@@ -138,36 +137,8 @@ Provide constructive, detailed feedback that helps the student improve their wri
   const data = await response.json();
   const content = data.content[0].text;
 
-  // Parse JSON response
   const feedback = JSON.parse(content) as EssayFeedback;
   return feedback;
-}
-
-async function saveEssaySubmission(
-  supabase: any,
-  essayText: string,
-  promptId: string,
-  userId: string,
-  feedback: EssayFeedback
-): Promise<string> {
-  const { data, error } = await supabase
-    .from("essay_submissions")
-    .insert({
-      user_id: userId,
-      essay_prompt_id: promptId,
-      essay_text: essayText,
-      feedback: feedback,
-      grade_estimate: feedback.grade_estimate,
-      created_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to save essay submission: ${error.message}`);
-  }
-
-  return data.id;
 }
 
 async function logActivity(
@@ -177,16 +148,15 @@ async function logActivity(
 ): Promise<void> {
   const { error } = await supabase.from("activity_feed").insert({
     user_id: userId,
-    action: "submit_essay",
-    resource_id: promptId,
-    resource_type: "essay_prompt",
-    status: "completed",
-    created_at: new Date().toISOString(),
+    activity_type: "study_session",
+    metadata: JSON.stringify({
+      prompt_id: promptId,
+      action: "submit_essay",
+    }),
   });
 
   if (error) {
     console.error("Failed to log activity:", error);
-    // Don't throw - activity logging is non-critical
   }
 }
 
@@ -236,15 +206,6 @@ async function handleEssayFeedback(req: Request): Promise<Response> {
     // Generate feedback with Claude
     const feedback = await generateEssayFeedback(essayText, essayPrompt);
 
-    // Save submission and feedback
-    const submissionId = await saveEssaySubmission(
-      supabase,
-      essayText,
-      promptId,
-      userId,
-      feedback
-    );
-
     // Log activity
     await logActivity(supabase, userId, promptId);
 
@@ -253,7 +214,6 @@ async function handleEssayFeedback(req: Request): Promise<Response> {
         success: true,
         message: "Essay feedback generated successfully",
         data: {
-          submission_id: submissionId,
           feedback: feedback,
         },
       }),
