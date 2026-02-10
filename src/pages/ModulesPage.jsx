@@ -53,41 +53,55 @@ const ModulesPage = () => {
   });
   const [isCreating, setIsCreating] = useState(false);
 
+  const [countsLoaded, setCountsLoaded] = useState(false);
+
   useEffect(() => {
-    fetchModules();
-  }, []);
+    if (!user) return;
+
+    const loadData = async () => {
+      await fetchModules();
+    };
+    loadData();
+  }, [user]);
 
   useEffect(() => {
     const loadCounts = async () => {
       if (!user || modules.length === 0) return;
 
-      const moduleIds = modules.map((m) => m.id);
+      try {
+        const { data: files } = await supabase
+          .from('files')
+          .select('module_id')
+          .eq('user_id', user.id);
 
-      const { data: files } = await supabase
-        .from('files')
-        .select('module_id', { count: 'exact' });
+        const { data: flashcards } = await supabase
+          .from('flashcards')
+          .select('module_id')
+          .eq('user_id', user.id);
 
-      const { data: flashcards } = await supabase
-        .from('flashcards')
-        .select('module_id', { count: 'exact' });
+        const newFileCounts = {};
+        const newFlashcardCounts = {};
 
-      const fileCounts = {};
-      const flashcardCounts = {};
+        files?.forEach((f) => {
+          newFileCounts[f.module_id] = (newFileCounts[f.module_id] || 0) + 1;
+        });
 
-      files?.forEach((f) => {
-        fileCounts[f.module_id] = (fileCounts[f.module_id] || 0) + 1;
-      });
+        flashcards?.forEach((f) => {
+          newFlashcardCounts[f.module_id] = (newFlashcardCounts[f.module_id] || 0) + 1;
+        });
 
-      flashcards?.forEach((f) => {
-        flashcardCounts[f.module_id] = (flashcardCounts[f.module_id] || 0) + 1;
-      });
-
-      setFileCounts(fileCounts);
-      setFlashcardCounts(flashcardCounts);
+        setFileCounts(newFileCounts);
+        setFlashcardCounts(newFlashcardCounts);
+      } catch (err) {
+        console.error('Error loading counts:', err);
+      }
     };
 
-    loadCounts();
-  }, [modules, user]);
+    if (!countsLoaded && modules.length > 0) {
+      setCountsLoaded(true);
+      loadCounts();
+    }
+  }, [modules, user, countsLoaded]);
 
   const handleCreateModule = async (e) => {
     e.preventDefault();
