@@ -100,6 +100,10 @@ const UploadPage = () => {
     onDrop,
     accept: ACCEPTED_FILE_TYPES,
     disabled: uploading,
+    onDropRejected: (rejectedFiles) => {
+      const names = rejectedFiles.map((r) => r.file.name).join(', ');
+      toast.error(`File type not supported: ${names}. Use PDF, PPTX, DOCX, TXT, or video files.`);
+    },
   });
 
   const uploadFile = async (file) => {
@@ -126,7 +130,7 @@ const UploadPage = () => {
             user_id: user.id,
             module_id: selectedModuleId,
             file_name: file.name,
-            file_type: file.name.endsWith('.pdf') ? 'pdf' : file.name.endsWith('.pptx') ? 'pptx' : 'video',
+            file_type: file.name.endsWith('.pdf') ? 'pdf' : file.name.endsWith('.pptx') ? 'pptx' : (file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm')) ? 'video' : 'pdf',
             file_size_bytes: file.size,
             storage_path: filePath,
             mime_type: file.type,
@@ -407,7 +411,7 @@ const UploadPage = () => {
                 {isDragActive ? 'Drop your files here' : 'Drag files here or click to select'}
               </div>
               <div style={dropzoneHintStyle}>
-                Supported: PDF, PowerPoint, MP4, MOV, WebM (Max 100MB)
+                Supported: PDF, PPTX, DOCX, TXT, MP4, MOV, WebM (Max 100MB)
               </div>
             </div>
           </div>

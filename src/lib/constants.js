@@ -22,6 +22,9 @@ export const TIER_LIMITS = {
 export const ACCEPTED_FILE_TYPES = {
   'application/pdf': ['.pdf'],
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+  'application/msword': ['.doc'],
+  'text/plain': ['.txt'],
   'video/mp4': ['.mp4'],
   'video/quicktime': ['.mov'],
   'video/webm': ['.webm'],
