@@ -81,6 +81,7 @@ const App = () => {
               <Route path="friends" element={<FriendsPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <Toaster
             position="top-right"

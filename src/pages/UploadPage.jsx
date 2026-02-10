@@ -237,8 +237,7 @@ const UploadPage = () => {
     color: '#a0a0b0',
   };
 
-  const dropzoneStyle = {
-    ...getRootProps(),
+  const dropzoneVisualStyle = {
     padding: '40px',
     border: isDragActive ? '2px dashed #6c5ce7' : '2px dashed #252532',
     borderRadius: '12px',
@@ -399,7 +398,7 @@ const UploadPage = () => {
       </Card>
 
       {selectedModuleId && (
-        <div {...dropzoneStyle}>
+        <div {...getRootProps()} style={dropzoneVisualStyle}>
           <input {...getInputProps()} />
           <div style={dropzoneContentStyle}>
             <Upload style={uploadIconStyle} />
