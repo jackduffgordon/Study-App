@@ -49,7 +49,7 @@ const UploadPage = () => {
 
         setUploadHistory(files || []);
 
-        const userTier = profile?.subscription_tier || 'free';
+        const userTier = profile?.tier || 'free';
         const tierLimits = TIER_LIMITS[userTier.toLowerCase()] || TIER_LIMITS.free;
 
         setUsageStats({
@@ -65,7 +65,7 @@ const UploadPage = () => {
     };
 
     loadUploadHistory();
-  }, [user, profile, fetchModules]);
+  }, [user, profile]);
 
   const onDrop = useCallback(
     async (acceptedFiles) => {
@@ -74,7 +74,7 @@ const UploadPage = () => {
         return;
       }
 
-      const userTier = profile?.subscription_tier || 'free';
+      const userTier = profile?.tier || 'free';
       const tierLimits = TIER_LIMITS[userTier.toLowerCase()] || TIER_LIMITS.free;
 
       if (usageStats.uploadsUsed >= tierLimits.uploads) {
@@ -126,9 +126,10 @@ const UploadPage = () => {
             user_id: user.id,
             module_id: selectedModuleId,
             file_name: file.name,
-            file_type: file.type,
-            file_size: file.size,
+            file_type: file.name.endsWith('.pdf') ? 'pdf' : file.name.endsWith('.pptx') ? 'pptx' : 'video',
+            file_size_bytes: file.size,
             storage_path: filePath,
+            mime_type: file.type,
             processing_status: 'pending',
           },
         ])

@@ -24,7 +24,7 @@ const Sidebar = () => {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const navItems = [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
     { label: 'Modules', icon: BookOpen, path: '/modules' },
     { label: 'Upload Files', icon: Upload, path: '/upload' },
     { label: 'Flashcards', icon: Layers, path: '/flashcards' },
@@ -230,7 +230,7 @@ const Sidebar = () => {
   };
 
   const profileName = profile?.full_name || user?.email?.split('@')[0] || 'User';
-  const profileTier = profile?.subscription_tier || 'Free';
+  const profileTier = profile?.tier || 'Free';
 
   return (
     <div style={sidebarStyle}>

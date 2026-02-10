@@ -76,14 +76,19 @@ const DashboardPage = () => {
           averageScore: avgScore,
         });
 
-        const { data: activity } = await supabase
-          .from('activity_feed')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(5);
+        try {
+          const { data: activity } = await supabase
+            .from('activity_feed')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(5);
 
-        setRecentActivity(activity || []);
+          setRecentActivity(activity || []);
+        } catch (actErr) {
+          console.warn('Activity feed not available:', actErr);
+          setRecentActivity([]);
+        }
 
         if (sessions && sessions.length > 0 && userModules) {
           const moduleMap = (userModules || []).reduce((acc, m) => {
@@ -326,7 +331,7 @@ const DashboardPage = () => {
               {recentActivity.map((activity) => (
                 <div key={activity.id} style={activityItemStyle}>
                   <div style={activityTextStyle}>
-                    <div style={activityTitleStyle}>{activity.description}</div>
+                    <div style={activityTitleStyle}>{activity.activity_type?.replace(/_/g, ' ') || 'Activity'}</div>
                     <div style={activityTimeStyle}>
                       {formatDistanceToNow(new Date(activity.created_at), {
                         addSuffix: true,

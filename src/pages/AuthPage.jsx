@@ -108,7 +108,7 @@ const AuthPage = () => {
           toast.error(error || 'Sign in failed');
         } else {
           toast.success('Welcome back!');
-          navigate('/dashboard');
+          navigate('/');
         }
       }
     } catch (err) {

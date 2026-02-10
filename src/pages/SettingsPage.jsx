@@ -60,10 +60,10 @@ const SettingsPage = () => {
 
         const { data: files } = await supabase
           .from('files')
-          .select('file_size', { count: 'exact' })
+          .select('file_size_bytes', { count: 'exact' })
           .eq('user_id', user.id);
 
-        const storageUsed = files?.reduce((sum, f) => sum + (f.file_size || 0), 0) || 0;
+        const storageUsed = files?.reduce((sum, f) => sum + (f.file_size_bytes || 0), 0) || 0;
 
         const { count: uploadCount } = await supabase
           .from('files')
@@ -75,7 +75,7 @@ const SettingsPage = () => {
           .select('*', { count: 'exact' })
           .eq('user_id', user.id);
 
-        const userTier = profile?.subscription_tier || 'free';
+        const userTier = profile?.tier || 'free';
         const tierLimits = TIER_LIMITS[userTier.toLowerCase()] || TIER_LIMITS.free;
 
         setUsageStats({
@@ -439,7 +439,7 @@ const SettingsPage = () => {
 
         <Card style={cardStyle}>
           <div style={tierBadgeStyle}>
-            {profile?.subscription_tier?.toUpperCase() || 'FREE'}
+            {profile?.tier?.toUpperCase() || 'FREE'}
           </div>
           <p
             style={{
@@ -450,7 +450,7 @@ const SettingsPage = () => {
             }}
           >
             You're currently on the{' '}
-            <strong>{profile?.subscription_tier?.toUpperCase() || 'Free'}</strong> plan.
+            <strong>{profile?.tier?.toUpperCase() || 'Free'}</strong> plan.
             Upgrade your plan to unlock more features and higher limits.
           </p>
 

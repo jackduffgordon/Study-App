@@ -32,7 +32,7 @@ export const ModuleProvider = ({ children }) => {
       const { data: sharedModules, error: sharedError } = await supabase
         .from('shared_modules')
         .select('modules(*)')
-        .eq('shared_with_id', user.id)
+        .eq('shared_with', user.id)
         .order('created_at', { ascending: false });
 
       if (sharedError) throw sharedError;

@@ -1,10 +1,10 @@
-import { useAuth } from './useAuth';
-import { TIER_LIMITS } from '../constants/tierLimits';
+import { useAuth } from '../contexts/AuthContext';
+import { TIER_LIMITS } from '../lib/constants';
 
 export function useTierLimits() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
 
-  if (!user) {
+  if (!profile) {
     return {
       limits: TIER_LIMITS.free,
       canUpload: false,
@@ -17,8 +17,7 @@ export function useTierLimits() {
     };
   }
 
-  const profile = user.user_metadata?.profile || {};
-  const tier = profile.subscription_tier || 'free';
+  const tier = profile.tier || 'free';
   const tierLimits = TIER_LIMITS[tier] || TIER_LIMITS.free;
 
   const monthlyUploadsUsed = profile.monthly_uploads_used || 0;
@@ -27,15 +26,15 @@ export function useTierLimits() {
 
   const uploadsRemaining = Math.max(
     0,
-    tierLimits.monthly_uploads - monthlyUploadsUsed
+    (tierLimits.uploads || 0) - monthlyUploadsUsed
   );
   const generationsRemaining = Math.max(
     0,
-    tierLimits.monthly_generations - monthlyGenerationsUsed
+    (tierLimits.generations || 0) - monthlyGenerationsUsed
   );
   const storageRemaining = Math.max(
     0,
-    tierLimits.storage_bytes - storageUsedBytes
+    (tierLimits.storage || 0) - storageUsedBytes
   );
 
   const canUpload =
